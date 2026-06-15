@@ -1,15 +1,17 @@
-# InflectionLM: Beam Token Visualization
+# InflectionLM: Output and Token Visualization
 
-InflectionLM is a tool designed to visualize "inflection points" in Large Language Model (LLM) generation. By leveraging beam search, the tool generates multiple alternative output paths (beams) and identifies tokens where the model's confidence was low, highlighting these as potential points where the generation could have diverged.
+<img src="Stochastic_parrot.JPG" width="25%">
+
+InflectionLM is a tool designed to visualize "inflection points" in Large Language Model (LLM) generation. By leveraging independent sampling, the tool generates multiple alternative output paths and identifies tokens where the model's confidence was low, highlighting these as potential points where the generation could have diverged.
 
 ## 🌟 Features
 
-- **Multi-Beam Generation**: Generates 5 alternative beams for every prompt using the GEMMA 4 model.
+- **Diverse Response Generation**: Generates 3 independent responses for every prompt using the GEMMA 4 model, utilizing Top-P (Nucleus) and Top-K sampling to maximize diversity.
 - **Confidence Highlighting**: Automatically highlights tokens with a probability score below **0.6** in red, marking them as "inflection points."
 - **Interactive Visualization**: 
   - A Gradio-based GUI to input prompts and view results.
-  - Ability to switch between the 5 generated beams.
-  - Toggleable detailed view showing exact probability scores for every token in a beam.
+  - Ability to switch between the 3 generated responses.
+  - Toggleable detailed view showing exact probability scores for every token in a response.
 - **Customizable Generation**: Adjustable temperature settings to control the randomness and diversity of the output.
 - **UI Preferences**: Support for both light and dark modes.
 
@@ -26,7 +28,7 @@ InflectionLM is a tool designed to visualize "inflection points" in Large Langua
 ```text
 InflectionLM/
 ├── app.py               # Gradio web application and UI logic
-├── inflections_funcs.py # Core logic for model loading, beam generation, and scoring
+├── inflections_funcs.py # Core logic for model loading, generation, and scoring
 ├── requirements.txt     # Project dependencies
 └── Stochastic_parrot.JPG # UI asset image
 ```
@@ -64,6 +66,6 @@ The application will start a Gradio server. Open the provided URL in your browse
 
 ## 📖 How it Works
 
-The tool uses **Beam Search** to maintain several top-scoring sequences simultaneously. After generation, it passes these sequences back through the model to extract the precise softmax probability of each chosen token. 
+The tool uses **Multinomial Sampling** with Top-P and Top-K filtering to generate distinct sequences. Instead of a deterministic beam search, it samples from the probability distribution to find diverse but high-quality responses. After generation, it extracts the softmax probability of each chosen token from the model's output scores.
 
 Tokens with a probability $< 0.6$ are considered "unconfident." In linguistic terms, these are the "inflections"—moments where the model's internal probability distribution was flatter, meaning alternative tokens were almost as likely, leading to potential variations in the final text.

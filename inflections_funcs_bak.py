@@ -19,7 +19,7 @@ def start_model(model_id: str = "google/gemma-4-31B-it"):
 
 def make_beams(model: AutoModelForCausalLM, processor: AutoProcessor, initial_prompt: str, temperature: float = 1.0) -> Tuple[Any, List[str]]:
     '''
-    Generates 3 diverse responses in response to a prompt.
+    Generates 5 beams in response to a prompt.
     '''
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
@@ -38,14 +38,12 @@ def make_beams(model: AutoModelForCausalLM, processor: AutoProcessor, initial_pr
     # Generate output
     generated_dicts = model.generate(**inputs,
                                     max_new_tokens=1024,
-                                    num_beams=1,          # Disable beam search for pure sampling
-                                    num_return_sequences=3, # Generate 3 independent diverse samples
+                                    num_beams=5,          # Enables beam search with 5 active beams
+                                    num_return_sequences=5, # Returns the top result
                                     return_dict_in_generate=True,
                                     output_scores=True,
-                                    temperature=temperature if temperature > 0 else 0.1, # Ensure T > 0 for sampling
-                                    top_p=0.9,             # Nucleus sampling for high-quality diversity
-                                    top_k=50,              # Top-K sampling to filter noise
-                                    do_sample=True)
+                                    temperature=temperature,
+                                    do_sample=True if temperature > 0 else False)
 
     transcription = processor.batch_decode(generated_dicts.sequences, skip_special_tokens=True)
 
@@ -55,13 +53,8 @@ def make_beams(model: AutoModelForCausalLM, processor: AutoProcessor, initial_pr
     print('----------------------------------------')
 
     print('Beam scores ----------------------------')
-    # sequences_scores is only present in beam search.
-    # For sampling, we can approximate the overall score by averaging the transition probabilities.
-    if hasattr(generated_dicts, 'sequences_scores'):
-        for score in generated_dicts.sequences_scores:
-            print(exp(score).item())
-    else:
-        print('Sampling mode: sequences_scores not available.')
+    for score in generated_dicts.sequences_scores:
+        print(exp(score).item())
     print('----------------------------------------')
 
     return generated_dicts, transcription
@@ -108,9 +101,6 @@ def calculate_score_vectors(model: AutoModelForCausalLM, generated_dicts: Any) -
     '''
     Creates a score vector for each beam containing the probability of each
     token that was chosen.
-
-    Optimized to use generated_dicts.scores instead of a full model forward pass
-    to prevent GPU timeouts on ZeroGPU.
     '''
     # Number of sequences generated
     num_sequences = generated_dicts.sequences.shape[0]
@@ -121,21 +111,25 @@ def calculate_score_vectors(model: AutoModelForCausalLM, generated_dicts: Any) -
     # Input length (prompt length)
     input_len = total_len - gen_len
 
-    # Stack the transition scores (logits) from the generation process
-    # generated_dicts.scores is a tuple of length gen_len, each element (num_beams, vocab_size)
-    all_logits = torch.stack(generated_dicts.scores, dim=0) # shape: (gen_len, num_sequences, vocab_size)
+    # To get the accurate probabilities for the final beams,
+    # we pass the final sequences back through the model.
+    with torch.no_grad():
+        outputs = model(generated_dicts.sequences)
+        logits = outputs.logits # shape: (num_sequences, total_len, vocab_size)
 
-    # Convert logits to probabilities across the vocab dimension
-    all_probs = F.softmax(all_logits, dim=-1) # shape: (gen_len, num_sequences, vocab_size)
+        # Convert logits to probabilities
+        probs = F.softmax(logits, dim=-1) # shape: (num_sequences, total_len, vocab_size)
 
-    score_vectors = []
-    for i in range(num_sequences):
-        beam_probs = []
-        # Extract the probability for the specific token that was chosen at each step
-        for t in range(gen_len):
-            token_id = generated_dicts.sequences[i, input_len + t]
-            prob = all_probs[t, i, token_id].item()
-            beam_probs.append(prob)
-        score_vectors.append(beam_probs)
+        score_vectors = []
+        for i in range(num_sequences):
+            beam_probs = []
+            # The generated tokens are at positions [input_len, total_len)
+            # The probability for the token at position t is found at logits index t-1
+            for t in range(input_len, total_len):
+                token_id = generated_dicts.sequences[i, t]
+                # Probability for token at position t is at index t-1 in the logits
+                prob = probs[i, t - 1, token_id].item()
+                beam_probs.append(prob)
+            score_vectors.append(beam_probs)
 
     return score_vectors
