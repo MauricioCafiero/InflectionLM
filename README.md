@@ -4,6 +4,12 @@
 
 InflectionLM is a tool designed to visualize "inflection points" in Large Language Model (LLM) generation. By leveraging independent sampling, the tool generates multiple alternative output paths and identifies tokens where the model's confidence was low, highlighting these as potential points where the generation could have diverged.
 
+[See the Demo on HuggingFace!](https://huggingface.co/spaces/build-small-hackathon/InflectionLM)
+
+or
+
+[Watch a video demo!](https://www.linkedin.com/posts/mauricio-cafiero-5481259b_buildsmallhackathon-gemma4-huggingface-ugcPost-7472245848584683521-L4hx)
+
 ## 🌟 Features
 
 - **Diverse Response Generation**: Generates 3 independent responses for every prompt using the GEMMA 4 model, utilizing Top-P (Nucleus) and Top-K sampling to maximize diversity.
